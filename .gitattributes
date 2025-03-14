@@ -1,2 +1,50 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+# 1. 导入基础库
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+
+# 2. 数据加载
+train_data = pd.read_csv('/kaggle/input/titanic/train.csv')  # 训练集
+test_data = pd.read_csv('/kaggle/input/titanic/test.csv')    # 测试集
+
+# 3. 数据预处理
+def preprocess(df):
+    # 处理缺失值
+    df['Age'].fillna(df['Age'].median(), inplace=True)      # 用中位数填充年龄
+    df['Embarked'].fillna(df['Embarked'].mode()[0], inplace=True)  # 用众数填充登船港口
+    df['Fare'].fillna(df['Fare'].median(), inplace=True)    # 用中位数填充票价
+    
+    # 特征工程
+    df['Sex'] = df['Sex'].map({'male': 0, 'female': 1})     # 性别转为数值
+    df['FamilySize'] = df['SibSp'] + df['Parch'] + 1        # 创建家庭大小特征
+    df = pd.get_dummies(df, columns=['Embarked'])           # 对登船港口进行独热编码
+    
+    # 删除不使用的特征
+    return df.drop(['PassengerId', 'Name', 'Ticket', 'Cabin'], axis=1)
+
+train_clean = preprocess(train_data)
+test_clean = preprocess(test_data)
+
+# 4. 划分训练集和验证集
+X = train_clean.drop('Survived', axis=1)
+y = train_clean['Survived']
+X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# 5. 训练模型
+model = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=42)
+model.fit(X_train, y_train)
+
+# 6. 模型评估
+val_pred = model.predict(X_val)
+print(f"验证集准确率：{accuracy_score(y_val, val_pred):.4f}")
+
+# 7. 生成提交结果
+test_pred = model.predict(test_clean)
+output = pd.DataFrame({
+    'PassengerId': test_data['PassengerId'],
+    'Survived': test_pred
+})
+output.to_csv('submission.csv', index=False)
